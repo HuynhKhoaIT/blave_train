@@ -1,0 +1,52 @@
+# ===== Dữ liệu VizWiz (không bao giờ commit) =====
+# Ảnh raw — quá lớn (>10GB), người chạy GPU sẽ tự tải từ vizwiz.cs.colorado.edu
+data/vizwiz/
+data/*.zip
+
+# Annotation raw (nặng ~25MB, dễ tải lại): bỏ luôn cho gọn repo
+data/train.json
+data/val.json
+data/test.json
+
+# File sinh ra từ prepare_data.py / make_demo.py
+data/train_converted.json
+data/val_converted.json
+data/train_demo.json
+data/needed.txt
+
+# Gói demo & staging — sinh ra từ make_demo.py
+demo_pack.zip
+demo_pack_staging/
+
+# ===== Output huấn luyện =====
+# Checkpoint adapter LoRA (vài chục MB mỗi cái, nhiều epoch sẽ phình)
+blip2_lora_demo/
+blip2_lora_full/
+blip2_lora_mini/
+*.safetensors
+*.bin
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Môi trường ảo
+.venv/
+venv/
+env/
+
+# ===== IDE / OS =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Secrets =====
+.env
+.env.*
+*.key

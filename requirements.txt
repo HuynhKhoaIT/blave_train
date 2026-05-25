@@ -1,0 +1,11 @@
+# requirements.txt — phiên bản đã kiểm chứng chạy được.
+# GHIM phiên bản để tránh lỗi "target modules not found" do transformers đổi tên lớp.
+# Nếu người chạy GPU chính dùng phiên bản khác, hãy chạy inspect_model.py trước.
+
+torch>=2.0.0
+transformers==4.40.0
+peft==0.10.0
+accelerate==0.29.0
+bitsandbytes==0.43.0     # chỉ cần khi use_qlora=True (GPU yếu). GPU mạnh có thể bỏ.
+Pillow>=9.0.0
+sentencepiece>=0.1.99    # tokenizer của OPT cần
