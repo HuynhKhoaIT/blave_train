@@ -1,11 +1,13 @@
 # requirements.txt — phiên bản đã kiểm chứng chạy được.
-# GHIM phiên bản để tránh lỗi "target modules not found" do transformers đổi tên lớp.
-# Nếu người chạy GPU chính dùng phiên bản khác, hãy chạy inspect_model.py trước.
+# Range thay vì pin cứng để tương thích Colab mới (CUDA 12.8 + tokenizers >=0.20).
+# Nếu LoRA báo "target modules not found", chạy inspect_model.py để tìm tên lớp đúng
+# cho phiên bản transformers hiện tại, rồi sửa LORA['target_modules'] trong config.py.
 
 torch>=2.0.0
-transformers==4.40.0
-peft==0.10.0
-accelerate==0.29.0
-bitsandbytes>=0.45.0     # chỉ cần khi use_qlora=True. Ghim >= để có binary CUDA 12.8 (Colab mới).
+transformers>=4.41.0     # bỏ pin 4.40 — không tương thích tokenizers mới Colab pre-install
+tokenizers>=0.20.0       # khớp với transformers >=4.41
+peft>=0.10.0
+accelerate>=0.29.0
+bitsandbytes>=0.45.0     # chỉ cần khi use_qlora=True. >=0.45 có binary CUDA 12.8.
 Pillow>=9.0.0
 sentencepiece>=0.1.99    # tokenizer của OPT cần
