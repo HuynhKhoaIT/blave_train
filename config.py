@@ -25,9 +25,11 @@ BASE_MODEL = "Salesforce/blip2-opt-2.7b"
 
 # ---- Hai hồ sơ cấu hình ----
 PROFILES = {
-    # Bản demo: nhỏ + nhanh, chỉ để kiểm chứng pipeline chạy thông
+    # Bản demo: nhỏ + nhanh, chỉ để kiểm chứng pipeline chạy thông.
+    # T4 16GB đủ chạy fp16 không cần qlora → tránh phụ thuộc bitsandbytes
+    # (hay xung đột phiên bản CUDA trên Colab).
     "demo": {
-        "use_qlora": True,         # T4 16GB nên bật 4-bit cho an toàn
+        "use_qlora": False,
         "batch_size": 2,
         "grad_accum": 2,           # batch hiệu dụng = 2*2 = 4
         "num_epochs": 2,           # chỉ 2 epoch để xem có lỗi không

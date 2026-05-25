@@ -6,6 +6,6 @@ torch>=2.0.0
 transformers==4.40.0
 peft==0.10.0
 accelerate==0.29.0
-bitsandbytes==0.43.0     # chỉ cần khi use_qlora=True (GPU yếu). GPU mạnh có thể bỏ.
+bitsandbytes>=0.45.0     # chỉ cần khi use_qlora=True. Ghim >= để có binary CUDA 12.8 (Colab mới).
 Pillow>=9.0.0
 sentencepiece>=0.1.99    # tokenizer của OPT cần
