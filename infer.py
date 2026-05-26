@@ -23,11 +23,19 @@ from config import BASE_MODEL
 
 def generate(model, processor, image_path, question, device):
     image = Image.open(image_path).convert("RGB")
-    prompt = f"Question: {question} Answer:"
-    inputs = processor(images=image, text=prompt, return_tensors="pt").to(device, torch.float16)
+    # BLaVe-CoT style: chỉ truyền câu hỏi (không gắn template "Question:...Answer:")
+    # → khớp cách train mới, tránh prompt leaking trong output.
+    inputs = processor(images=image, text=question, return_tensors="pt").to(device, torch.float16)
     prompt_len = inputs["input_ids"].shape[1]
     with torch.no_grad():
-        ids = model.generate(**inputs, max_new_tokens=20, num_beams=3)
+        ids = model.generate(
+            **inputs,
+            max_new_tokens=20,
+            num_beams=3,
+            repetition_penalty=1.3,        # phạt token đã sinh → giảm lặp
+            no_repeat_ngram_size=2,        # cấm lặp bigram → tránh "x x x x"
+            early_stopping=True,           # dừng khi tất cả beam đạt EOS
+        )
     # BLIP-2 + OPT trả về cả prompt prefix trong output → slice bỏ để chỉ giữ phần sinh thêm.
     generated = ids[:, prompt_len:]
     return processor.batch_decode(generated, skip_special_tokens=True)[0].strip()
@@ -35,17 +43,19 @@ def generate(model, processor, image_path, question, device):
 
 def generate_candidates(model, processor, image_path, question, device, n=3):
     image = Image.open(image_path).convert("RGB")
-    prompt = f"Question: {question} Answer:"
-    inputs = processor(images=image, text=prompt, return_tensors="pt").to(device, torch.float16)
-    prompt_len = inputs["input_ids"].shape[1]      # ← thêm: đo độ dài prompt
+    inputs = processor(images=image, text=question, return_tensors="pt").to(device, torch.float16)
+    prompt_len = inputs["input_ids"].shape[1]
     with torch.no_grad():
         ids = model.generate(
             **inputs,
             max_new_tokens=20,
             num_beams=5,
             num_return_sequences=n,
+            repetition_penalty=1.3,        # phạt token đã sinh → giảm lặp
+            no_repeat_ngram_size=2,        # cấm lặp bigram → tránh "basil leaves basil leaves..."
+            early_stopping=True,
         )
-    generated = ids[:, prompt_len:]                 # ← thêm: cắt bỏ phần prompt
+    generated = ids[:, prompt_len:]
     answers = processor.batch_decode(generated, skip_special_tokens=True)
     return [a.strip() for a in answers]
 

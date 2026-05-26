@@ -55,44 +55,32 @@ class VizWizDataset(Dataset):
         else:
             answer = it["answer"]
 
-        prompt = f"Question: {it['question']} Answer:"
-        full_text = f"{prompt} {answer}"
-
+        # BLaVe-CoT style: input = ảnh + câu hỏi (không có prompt template "Question:...Answer:")
+        #                  labels = TOKENS CỦA ANSWER (không lẫn prompt → tránh prompt leaking).
+        # Tránh prompt leaking đã thấy ở mẫu 3: model trước đó học cả template
+        # và generate lại "Question:... Answer:..." sau câu trả lời.
+        max_len = self.cfg["max_prompt_len"]    # dùng chung max_len cho cả question và answer (khớp BLaVe-CoT = 32)
         tokenizer = self.processor.tokenizer
-        max_len = self.cfg["max_prompt_len"] + self.cfg["max_answer_len"]
 
-        # Ảnh: dùng image_processor riêng để khỏi vướng tham số padding của tokenizer.
-        pixel_values = self.processor.image_processor(
-            image, return_tensors="pt"
-        ).pixel_values.squeeze(0)
-
-        # Text: prompt + answer trong cùng chuỗi (causal LM cần đủ context để tính loss).
-        full_enc = tokenizer(
-            full_text, return_tensors="pt",
-            padding="max_length", truncation=True, max_length=max_len,
+        # Encode ảnh + câu hỏi (image_processor + tokenizer trong cùng processor)
+        encoding = self.processor(
+            images=image, text=it["question"],
+            padding="max_length", max_length=max_len,
+            truncation=True, return_tensors="pt",
         )
-        input_ids = full_enc.input_ids.squeeze(0)
-        attention_mask = full_enc.attention_mask.squeeze(0)
+        encoding = {k: v.squeeze(0) for k, v in encoding.items()}
 
-        # Đo độ dài prompt (không pad) để biết tới đâu là vùng cần mask khi tính loss.
-        prompt_ids = tokenizer(
-            prompt, return_tensors="pt", padding=False,
-            truncation=True, max_length=self.cfg["max_prompt_len"],
-        ).input_ids.squeeze(0)
-        prompt_len = prompt_ids.shape[0]
+        # Labels = chỉ tokens của answer (không có prefix "Question:...Answer:"),
+        # pad_token bị mask thành -100 để không tính loss trên padding.
+        answer_ids = tokenizer.encode(
+            answer, add_special_tokens=False,
+            max_length=max_len, truncation=True, padding="max_length",
+        )
+        labels = torch.tensor(answer_ids)
+        labels[labels == tokenizer.pad_token_id] = -100
+        encoding["labels"] = labels
 
-        # labels = input_ids, nhưng mask phần prompt và phần pad bằng -100
-        # → loss chỉ tính trên các token thuộc đáp án.
-        labels = input_ids.clone()
-        labels[:prompt_len] = -100
-        labels[input_ids == tokenizer.pad_token_id] = -100
-
-        return {
-            "pixel_values": pixel_values,
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "labels": labels,
-        }
+        return encoding
 
 
 # ----------------------------------------------------------------------
