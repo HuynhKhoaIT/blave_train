@@ -32,7 +32,7 @@ PROFILES = {
         "use_qlora": True,
         "batch_size": 2,
         "grad_accum": 2,           # batch hiệu dụng = 2*2 = 4
-        "num_epochs": 2,           # chỉ 2 epoch để xem có lỗi không
+        "num_epochs": 5,           # chỉ 5 epoch để xem có lỗi không
         "max_train_samples": 200,  # CHỈ lấy 200 mẫu
         "max_val_samples": 50,     # eval nhanh khi demo
         "eval_every": 1,           # eval mỗi epoch

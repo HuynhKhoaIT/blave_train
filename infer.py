@@ -33,6 +33,22 @@ def generate(model, processor, image_path, question, device):
     return processor.batch_decode(generated, skip_special_tokens=True)[0].strip()
 
 
+def generate_candidates(model, processor, image_path, question, device, n=3):
+    image = Image.open(image_path).convert("RGB")
+    prompt = f"Question: {question} Answer:"
+    inputs = processor(images=image, text=prompt, return_tensors="pt").to(device, torch.float16)
+    prompt_len = inputs["input_ids"].shape[1]      # ← thêm: đo độ dài prompt
+    with torch.no_grad():
+        ids = model.generate(
+            **inputs,
+            max_new_tokens=20,
+            num_beams=5,
+            num_return_sequences=n,
+        )
+    generated = ids[:, prompt_len:]                 # ← thêm: cắt bỏ phần prompt
+    answers = processor.batch_decode(generated, skip_special_tokens=True)
+    return [a.strip() for a in answers]
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--adapter", required=True, help="Thư mục adapter LoRA đã train")
@@ -40,11 +56,12 @@ def main():
     ap.add_argument("--question", required=True)
     ap.add_argument("--compare", action="store_true",
                     help="So sánh với BLIP-2 gốc chưa fine-tune")
+    ap.add_argument("--candidates", type=int, default=0,
+                    help="Sinh N đáp án ứng viên thay vì 1 (vd --candidates 3)")
     args = ap.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     processor = Blip2Processor.from_pretrained(BASE_MODEL)
-
     base = Blip2ForConditionalGeneration.from_pretrained(
         BASE_MODEL, torch_dtype=torch.float16
     ).to(device)
@@ -55,8 +72,15 @@ def main():
 
     model = PeftModel.from_pretrained(base, args.adapter).to(device)
     model.eval()
-    ans_ft = generate(model, processor, args.image, args.question, device)
-    print(f"[SAU FINE-TUNE]   {ans_ft}")
+
+    if args.candidates > 0:
+        answers = generate_candidates(model, processor, args.image, args.question, device, n=args.candidates)
+        print("[SAU FINE-TUNE] Các đáp án ứng viên:")
+        for i, a in enumerate(answers, 1):
+            print(f"  {i}. {a}")
+    else:
+        ans_ft = generate(model, processor, args.image, args.question, device)
+        print(f"[SAU FINE-TUNE]   {ans_ft}")
 
 
 if __name__ == "__main__":
