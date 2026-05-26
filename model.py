@@ -38,15 +38,18 @@ def build_model_for_training(cfg):
             torch_dtype=torch.float16,
             device_map="auto",   # bnb yêu cầu; cũng để train.py KHÔNG cần .to(device)
         )
+        # QLoRA: BẮT BUỘC gọi prepare_model_for_kbit_training (yêu cầu của bitsandbytes)
         model = prepare_model_for_kbit_training(model)
     else:
-        # GPU mạnh: nạp float16 bình thường
+        # GPU mạnh: nạp float16 bình thường.
         model = Blip2ForConditionalGeneration.from_pretrained(
             base_model, torch_dtype=torch.float16
         )
-        # Khớp BLaVe-CoT: luôn gọi prepare_model_for_kbit_training để freeze base,
-        # bật gradient checkpointing, và cast LayerNorm về fp32 (tránh NaN khi fp16).
-        model = prepare_model_for_kbit_training(model)
+        # Cờ prepare_kbit (config.py):
+        #   - False (demo trên T4 16GB): TẮT, vì hàm này cast fp16→fp32, ngốn 2x VRAM → OOM.
+        #   - True  (full trên GPU ≥24GB): BẬT để khớp BLaVe-CoT (gradient ckpt + LayerNorm fp32).
+        if cfg.get("prepare_kbit", False):
+            model = prepare_model_for_kbit_training(model)
 
 #Cấu hình adapter
     lora_config = LoraConfig(

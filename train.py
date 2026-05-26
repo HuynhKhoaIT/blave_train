@@ -126,6 +126,7 @@ def main():
     print(f"PROFILE          : {cfg['profile_name']}")
     print(f"Device           : {device}")
     print(f"QLoRA (4-bit)    : {cfg['use_qlora']}")
+    print(f"prepare_kbit     : {cfg.get('prepare_kbit', False)}")
     print(f"Batch size       : {cfg['batch_size']}  x grad_accum {cfg['grad_accum']}"
           f"  = effective {cfg['batch_size'] * cfg['grad_accum']}")
     print(f"Epochs           : {cfg['num_epochs']}")

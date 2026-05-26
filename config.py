@@ -30,6 +30,7 @@ PROFILES = {
     # (hay xung đột phiên bản CUDA trên Colab).
     "demo": {
         "use_qlora": True,
+        "prepare_kbit": False,     # T4 16GB: TẮT để tránh OOM (cast fp16→fp32 ngốn 2x VRAM)
         "batch_size": 2,
         "grad_accum": 2,           # batch hiệu dụng = 2*2 = 4
         "num_epochs": 5,           # chỉ 5 epoch để xem có lỗi không
@@ -43,6 +44,7 @@ PROFILES = {
     # Bản thật: train đủ như bài báo (epoch 40), toàn bộ dữ liệu
     "full": {
         "use_qlora": True,        # GPU mạnh (>=24GB) không cần lượng tử hoá
+        "prepare_kbit": True,      # GPU ≥24GB: BẬT để khớp BLaVe-CoT (gradient ckpt + LayerNorm fp32)
         "batch_size": 8,
         "grad_accum": 2,           # batch hiệu dụng = 16
         "num_epochs": 40,          # đúng checkpoint tốt nhất trong bài báo
