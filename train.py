@@ -57,30 +57,42 @@ class VizWizDataset(Dataset):
 
         # BLaVe-CoT style: input = ảnh + câu hỏi (không có prompt template "Question:...Answer:")
         #                  labels = TOKENS CỦA ANSWER (không lẫn prompt → tránh prompt leaking).
-        # Tránh prompt leaking đã thấy ở mẫu 3: model trước đó học cả template
-        # và generate lại "Question:... Answer:..." sau câu trả lời.
+        # Tách image_processor và tokenizer thủ công để đảm bảo padding nhất quán
+        # (processor() của BLIP-2 không honor padding="max_length" cho text → lỗi stack).
         max_len = self.cfg["max_prompt_len"]    # dùng chung max_len cho cả question và answer (khớp BLaVe-CoT = 32)
         tokenizer = self.processor.tokenizer
 
-        # Encode ảnh + câu hỏi (image_processor + tokenizer trong cùng processor)
-        encoding = self.processor(
-            images=image, text=it["question"],
-            padding="max_length", max_length=max_len,
-            truncation=True, return_tensors="pt",
-        )
-        encoding = {k: v.squeeze(0) for k, v in encoding.items()}
+        # Ảnh
+        pixel_values = self.processor.image_processor(
+            image, return_tensors="pt"
+        ).pixel_values.squeeze(0)
 
-        # Labels = chỉ tokens của answer (không có prefix "Question:...Answer:"),
+        # Câu hỏi (input)
+        q_enc = tokenizer(
+            it["question"],
+            return_tensors="pt",
+            padding="max_length", truncation=True, max_length=max_len,
+        )
+        input_ids = q_enc.input_ids.squeeze(0)
+        attention_mask = q_enc.attention_mask.squeeze(0)
+
+        # Đáp án (labels) — không thêm special token để khớp BLaVe-CoT,
         # pad_token bị mask thành -100 để không tính loss trên padding.
-        answer_ids = tokenizer.encode(
-            answer, add_special_tokens=False,
-            max_length=max_len, truncation=True, padding="max_length",
+        a_enc = tokenizer(
+            answer,
+            return_tensors="pt",
+            padding="max_length", truncation=True, max_length=max_len,
+            add_special_tokens=False,
         )
-        labels = torch.tensor(answer_ids)
+        labels = a_enc.input_ids.squeeze(0)
         labels[labels == tokenizer.pad_token_id] = -100
-        encoding["labels"] = labels
 
-        return encoding
+        return {
+            "pixel_values": pixel_values,
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels,
+        }
 
 
 # ----------------------------------------------------------------------
