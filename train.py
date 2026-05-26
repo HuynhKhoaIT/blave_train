@@ -9,7 +9,7 @@ Cách dùng:
 
 Kết quả: adapter LoRA (~20MB) được lưu vào output_dir trong config.
 """
-
+# Load config -> Load model + LoRA -> Load dataset -> DataLoader chia batch -> Forward -> Tính loss -> Backward -> Update LoRA weights -> Save adapter
 import os
 import json
 import torch
@@ -18,7 +18,6 @@ from PIL import Image
 
 from config import get_active_config
 from model import build_model_for_training
-
 
 # ----------------------------------------------------------------------
 # Dataset
@@ -36,8 +35,9 @@ class VizWizDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
+    #Mỗi lần DataLoader cần 1 sample: hàm này sẽ chạy
     def __getitem__(self, idx):
-        it = self.data[idx]
+        it = self.data[idx] 
         img_path = os.path.join(self.image_dir, it["image"])
         image = Image.open(img_path).convert("RGB")
 
@@ -83,6 +83,26 @@ class VizWizDataset(Dataset):
 
 
 # ----------------------------------------------------------------------
+# Evaluation
+# ----------------------------------------------------------------------
+@torch.no_grad()
+def evaluate(model, loader, device):
+    """Chạy 1 vòng val: tắt dropout, không tính grad, trả về loss trung bình."""
+    was_training = model.training
+    model.eval()
+    total = 0.0
+    n = 0
+    for batch in loader:
+        batch = {k: v.to(device) for k, v in batch.items()}
+        out = model(**batch)
+        total += out.loss.item()
+        n += 1
+    if was_training:
+        model.train()
+    return total / max(n, 1)
+
+
+# ----------------------------------------------------------------------
 # Train
 # ----------------------------------------------------------------------
 def main():
@@ -124,16 +144,32 @@ def main():
     loader = DataLoader(dataset, batch_size=cfg["batch_size"], shuffle=True)
     print(f"Số mẫu train: {len(dataset)}  |  Số batch/epoch: {len(loader)}")
 
+    # --- Dữ liệu validation (tuỳ chọn) ---
+    val_loader = None
+    val_path = cfg["paths"].get("val_json")
+    val_img_dir = cfg["paths"].get("val_image_dir")
+    if val_path and os.path.exists(val_path):
+        val_dataset = VizWizDataset(
+            val_path, val_img_dir, processor, cfg,
+            max_samples=cfg.get("max_val_samples"),
+        )
+        val_loader = DataLoader(val_dataset, batch_size=cfg["batch_size"], shuffle=False)
+        print(f"Số mẫu val  : {len(val_dataset)}  |  Số batch eval : {len(val_loader)}")
+    else:
+        print(f"(Bỏ qua validation — không thấy {val_path}. Chạy prepare_data.py cho val nếu cần.)")
+
     # --- Optimizer (chỉ tham số LoRA có requires_grad=True) ---
     optimizer = torch.optim.AdamW(
         [p for p in model.parameters() if p.requires_grad], lr=cfg["lr"]
     )
 
     accum = cfg["grad_accum"]
+    eval_every = cfg.get("eval_every", 1)
     os.makedirs(cfg["output_dir"], exist_ok=True)
 
     # --- Vòng huấn luyện ---
     for epoch in range(cfg["num_epochs"]):
+        model.train()
         running = 0.0
         optimizer.zero_grad()
         for step, batch in enumerate(loader):
@@ -147,8 +183,18 @@ def main():
                 optimizer.step()
                 optimizer.zero_grad()
 
-        avg = running / max(len(loader), 1)
-        print(f"Epoch {epoch + 1}/{cfg['num_epochs']}  loss = {avg:.4f}")
+        train_loss = running / max(len(loader), 1)
+
+        # --- Validation ---
+        val_loss = None
+        if val_loader is not None and (epoch + 1) % eval_every == 0:
+            val_loss = evaluate(model, val_loader, device)
+
+        if val_loss is not None:
+            print(f"Epoch {epoch + 1}/{cfg['num_epochs']}  "
+                  f"train_loss = {train_loss:.4f}  |  val_loss = {val_loss:.4f}")
+        else:
+            print(f"Epoch {epoch + 1}/{cfg['num_epochs']}  train_loss = {train_loss:.4f}")
 
         # Lưu checkpoint định kỳ
         if (epoch + 1) % cfg["save_every"] == 0:

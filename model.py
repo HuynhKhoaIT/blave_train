@@ -9,10 +9,10 @@ Triết lý (theo bài báo BLaVe-CoT):
   - Chỉ huấn luyện adapter LoRA gắn vào Query/Key của Q-Former
   => số tham số train < 1%, file adapter chỉ ~20MB
 """
-
 import torch
 from transformers import Blip2ForConditionalGeneration, Blip2Processor
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from transformers import BitsAndBytesConfig
 
 
 def build_processor(base_model):
@@ -26,12 +26,11 @@ def build_model_for_training(cfg):
 
     if cfg["use_qlora"]:
         # Nạp ở 4-bit cho GPU yếu (<=12-16GB)
-        from transformers import BitsAndBytesConfig
         bnb = BitsAndBytesConfig(
             load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
+            bnb_4bit_quant_type="nf4", #NormalFloat4 : Loại quantization tốt cho LLM.
             bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
+            bnb_4bit_use_double_quant=True, # Tiết kiệm VRAM
         )
         model = Blip2ForConditionalGeneration.from_pretrained(
             base_model,
@@ -46,16 +45,17 @@ def build_model_for_training(cfg):
             base_model, torch_dtype=torch.float16
         )
 
+#Cấu hình adapter
     lora_config = LoraConfig(
-        r=cfg["lora"]["r"],
-        lora_alpha=cfg["lora"]["lora_alpha"],
+        r=cfg["lora"]["r"], #rank càng lớn học càng mạnh -> tổn ram :)
+        lora_alpha=cfg["lora"]["lora_alpha"], #Scale độ ảnh hưởng của LoRA. -> thường r or 2r
         lora_dropout=cfg["lora"]["lora_dropout"],
-        target_modules=cfg["lora"]["target_modules"],
+        target_modules=cfg["lora"]["target_modules"], # quan trọng để biến gắn LoRA vào layer nào
         bias="none",
     )
 
     try:
-        model = get_peft_model(model, lora_config)
+        model = get_peft_model(model, lora_config) #chèn lora vào model
     except ValueError as e:
         # Lỗi phổ biến nhất: tên lớp Q/K khác giữa các phiên bản transformers
         raise RuntimeError(

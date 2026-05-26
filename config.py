@@ -29,22 +29,26 @@ PROFILES = {
     # T4 16GB đủ chạy fp16 không cần qlora → tránh phụ thuộc bitsandbytes
     # (hay xung đột phiên bản CUDA trên Colab).
     "demo": {
-        "use_qlora": False,
+        "use_qlora": True,
         "batch_size": 2,
         "grad_accum": 2,           # batch hiệu dụng = 2*2 = 4
         "num_epochs": 2,           # chỉ 2 epoch để xem có lỗi không
         "max_train_samples": 200,  # CHỈ lấy 200 mẫu
+        "max_val_samples": 50,     # eval nhanh khi demo
+        "eval_every": 1,           # eval mỗi epoch
         "lr": 1e-4,
         "save_every": 1,
         "output_dir": "./blip2_lora_demo",
     },
     # Bản thật: train đủ như bài báo (epoch 40), toàn bộ dữ liệu
     "full": {
-        "use_qlora": False,        # GPU mạnh (>=24GB) không cần lượng tử hoá
+        "use_qlora": True,        # GPU mạnh (>=24GB) không cần lượng tử hoá
         "batch_size": 8,
         "grad_accum": 2,           # batch hiệu dụng = 16
         "num_epochs": 40,          # đúng checkpoint tốt nhất trong bài báo
         "max_train_samples": None, # None = dùng toàn bộ
+        "max_val_samples": None,   # None = dùng toàn bộ val set
+        "eval_every": 1,           # eval mỗi epoch để theo dõi overfit
         "lr": 1e-4,
         "save_every": 10,          # lưu checkpoint mỗi 10 epoch
         "output_dir": "./blip2_lora_full",
@@ -53,8 +57,10 @@ PROFILES = {
 
 # ---- Cấu hình LoRA (đúng mô tả bài báo: chỉ chỉnh Query/Key của Q-Former) ----
 LORA = {
-    "r": 8,
-    "lora_alpha": 16,
+    # Tăng từ r=8 lên r=16 để khớp với file gốc finetune_blip2.py
+    # và một số phiên bản BLaVe-CoT — học mạnh hơn, adapter ~2x lớn (vẫn nhỏ <50MB).
+    "r": 16,
+    "lora_alpha": 32,           # giữ tỉ lệ alpha = 2*r
     "lora_dropout": 0.05,
     # Lưu ý: tên lớp có thể khác giữa các phiên bản transformers.
     # Nếu báo "target modules not found", chạy inspect_model.py để tìm tên đúng.
