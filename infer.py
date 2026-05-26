@@ -23,10 +23,11 @@ from config import BASE_MODEL
 
 def generate(model, processor, image_path, question, device):
     image = Image.open(image_path).convert("RGB")
-    # BLaVe-CoT style: chỉ truyền câu hỏi (không gắn template "Question:...Answer:")
-    # → khớp cách train mới, tránh prompt leaking trong output.
-    inputs = processor(images=image, text=question, return_tensors="pt").to(device, torch.float16)
+    # Prompt-based format — khớp cách BLIP-2 + OPT được pretrain cho VQA.
+    prompt = f"Question: {question} Answer:"
+    inputs = processor(images=image, text=prompt, return_tensors="pt").to(device, torch.float16)
     prompt_len = inputs["input_ids"].shape[1]
+    eos_id = processor.tokenizer.eos_token_id
     with torch.no_grad():
         ids = model.generate(
             **inputs,
@@ -35,6 +36,7 @@ def generate(model, processor, image_path, question, device):
             repetition_penalty=1.3,        # phạt token đã sinh → giảm lặp
             no_repeat_ngram_size=2,        # cấm lặp bigram → tránh "x x x x"
             early_stopping=True,           # dừng khi tất cả beam đạt EOS
+            eos_token_id=eos_id,           # dùng EOS để dừng → không leak prompt
         )
     # BLIP-2 + OPT trả về cả prompt prefix trong output → slice bỏ để chỉ giữ phần sinh thêm.
     generated = ids[:, prompt_len:]
@@ -43,8 +45,10 @@ def generate(model, processor, image_path, question, device):
 
 def generate_candidates(model, processor, image_path, question, device, n=3):
     image = Image.open(image_path).convert("RGB")
-    inputs = processor(images=image, text=question, return_tensors="pt").to(device, torch.float16)
+    prompt = f"Question: {question} Answer:"
+    inputs = processor(images=image, text=prompt, return_tensors="pt").to(device, torch.float16)
     prompt_len = inputs["input_ids"].shape[1]
+    eos_id = processor.tokenizer.eos_token_id
     with torch.no_grad():
         ids = model.generate(
             **inputs,
@@ -54,6 +58,7 @@ def generate_candidates(model, processor, image_path, question, device, n=3):
             repetition_penalty=1.3,        # phạt token đã sinh → giảm lặp
             no_repeat_ngram_size=2,        # cấm lặp bigram → tránh "basil leaves basil leaves..."
             early_stopping=True,
+            eos_token_id=eos_id,
         )
     generated = ids[:, prompt_len:]
     answers = processor.batch_decode(generated, skip_special_tokens=True)
