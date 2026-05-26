@@ -4,10 +4,10 @@ model.py — Dựng mô hình BLIP-2 và gắn adapter LoRA.
 Tách riêng phần này để train.py (huấn luyện) và infer.py (dùng lại) chia sẻ
 cùng một logic dựng mô hình, tránh lệch nhau.
 
-Triết lý (theo bài báo BLaVe-CoT):
-  - Đóng băng Vision Encoder và Language Model (OPT-2.7B)
-  - Chỉ huấn luyện adapter LoRA gắn vào Query/Key của Q-Former
-  => số tham số train < 1%, file adapter chỉ ~20MB
+Triết lý (khớp finetune_blip2.py của BLaVe-CoT):
+  - Đóng băng Vision Encoder và Q-Former
+  - Chỉ huấn luyện adapter LoRA gắn vào q_proj/k_proj của OPT decoder
+  => số tham số train < 1%, file adapter ~20MB
 """
 import torch
 from transformers import Blip2ForConditionalGeneration, Blip2Processor
@@ -44,6 +44,9 @@ def build_model_for_training(cfg):
         model = Blip2ForConditionalGeneration.from_pretrained(
             base_model, torch_dtype=torch.float16
         )
+        # Khớp BLaVe-CoT: luôn gọi prepare_model_for_kbit_training để freeze base,
+        # bật gradient checkpointing, và cast LayerNorm về fp32 (tránh NaN khi fp16).
+        model = prepare_model_for_kbit_training(model)
 
 #Cấu hình adapter
     lora_config = LoraConfig(

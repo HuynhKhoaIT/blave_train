@@ -5,8 +5,10 @@ mà train.py cần.
 Annotation gốc VizWiz: list các dict, mỗi dict có "image", "question",
 "answers" (list 10 đáp án từ 10 người gán nhãn).
 
-Đầu ra: list các dict {"image", "question", "answer"} với answer là đáp án
-phổ biến nhất (majority vote).
+Đầu ra: list các dict {"image", "question", "answer", "answers"}:
+  - "answer": đáp án phổ biến nhất (majority vote) — giữ để backwards compat.
+  - "answers": list các đáp án đã làm sạch — để train.py weighted-sample
+    lúc runtime (khớp finetune_blip2.py của BLaVe-CoT).
 
 Cách dùng:
   python prepare_data.py \
@@ -54,16 +56,24 @@ def convert(raw_path, max_samples=None):
     for item in raw:
         # VizWiz dùng key "answers"; phòng trường hợp thiếu
         answers = item.get("answers", [])
-        mc = majority_answer(answers)
+        cleaned = [
+            a["answer"].strip().lower()
+            for a in answers
+            if a.get("answer") and a["answer"].strip().lower() not in SKIP_ANSWERS
+        ]
 
-        if mc is None or mc in SKIP_ANSWERS:
+        if not cleaned:
             skipped += 1
             continue
+
+        # Majority vote cho backwards compat + cleaned list cho weighted sampling.
+        mc = Counter(cleaned).most_common(1)[0][0]
 
         out.append({
             "image": item["image"],
             "question": item["question"],
             "answer": mc,
+            "answers": cleaned,   # ← BLaVe-CoT style: giữ cả list để train.py sample
         })
         needed_images.add(item["image"])
 

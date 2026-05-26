@@ -55,16 +55,15 @@ PROFILES = {
     },
 }
 
-# ---- Cấu hình LoRA (đúng mô tả bài báo: chỉ chỉnh Query/Key của Q-Former) ----
+# ---- Cấu hình LoRA (khớp finetune_blip2.py của BLaVe-CoT: q_proj/k_proj của OPT decoder) ----
 LORA = {
-    # Tăng từ r=8 lên r=16 để khớp với file gốc finetune_blip2.py
-    # và một số phiên bản BLaVe-CoT — học mạnh hơn, adapter ~2x lớn (vẫn nhỏ <50MB).
+    # r=16, alpha=32, dropout=0.05 — y hệt finetune_blip2.py
     "r": 16,
     "lora_alpha": 32,           # giữ tỉ lệ alpha = 2*r
     "lora_dropout": 0.05,
-    # Lưu ý: tên lớp có thể khác giữa các phiên bản transformers.
+    # q_proj, k_proj là Query/Key projection của OPT decoder (language model trong BLIP-2).
     # Nếu báo "target modules not found", chạy inspect_model.py để tìm tên đúng.
-    "target_modules": ["query", "key"],
+    "target_modules": ["q_proj", "k_proj"],
 }
 
 # ---- Độ dài token ----

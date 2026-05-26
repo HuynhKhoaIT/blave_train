@@ -12,6 +12,9 @@ Kết quả: adapter LoRA (~20MB) được lưu vào output_dir trong config.
 # Load config -> Load model + LoRA -> Load dataset -> DataLoader chia batch -> Forward -> Tính loss -> Backward -> Update LoRA weights -> Save adapter
 import os
 import json
+import random
+from collections import Counter
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
@@ -37,12 +40,22 @@ class VizWizDataset(Dataset):
 
     #Mỗi lần DataLoader cần 1 sample: hàm này sẽ chạy
     def __getitem__(self, idx):
-        it = self.data[idx] 
+        it = self.data[idx]
         img_path = os.path.join(self.image_dir, it["image"])
         image = Image.open(img_path).convert("RGB")
 
+        # Weighted sampling từ 10 câu trả lời (khớp finetune_blip2.py của BLaVe-CoT).
+        # Nếu data cũ chỉ có field "answer" thì fallback dùng nó.
+        if it.get("answers"):
+            counts = Counter(it["answers"])
+            answer = random.choices(
+                it["answers"],
+                weights=[counts[a] for a in it["answers"]],
+            )[0]
+        else:
+            answer = it["answer"]
+
         prompt = f"Question: {it['question']} Answer:"
-        answer = it["answer"]
         full_text = f"{prompt} {answer}"
 
         tokenizer = self.processor.tokenizer
